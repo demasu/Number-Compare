@@ -1,42 +1,92 @@
 package Number::Compare;
+
 use strict;
+use warnings;
+
+use bignum;
+use Number::Format 'format_number';
+use Math::BigFloat;
+
 use Carp qw(croak);
 use vars qw/$VERSION/;
-$VERSION = '0.03';
+$VERSION = '0.0.4';
 
 sub new  {
     my $referent = shift;
     my $class = ref $referent || $referent;
     my $expr = $class->parse_to_perl( shift );
+    # print STDERR "# Compare.pm: Expression is: [$expr]\n";
 
-    bless eval "sub { \$_[0] $expr }", $class;
+    bless eval "sub { return \$_[0] $expr }", $class;
 }
 
 sub parse_to_perl {
-    shift;
+    my $self = shift;
     my $test = shift;
+
+    my %magnitudes = (
+        'k'  => Math::BigFloat->new('1000e0'),
+        'm'  => Math::BigFloat->new('1000e3'),
+        'g'  => Math::BigFloat->new('1000e6'),
+        't'  => Math::BigFloat->new('1000e9'),
+        'p'  => Math::BigFloat->new('1000e12'),
+        'e'  => Math::BigFloat->new('1000e15'),
+        'z'  => Math::BigFloat->new('1000e18'),
+        'y'  => Math::BigFloat->new('1000e21'),
+        'ki' => Math::BigFloat->new('1024')->bpow('1'),
+        'mi' => Math::BigFloat->new('1024')->bpow('2'),
+        'gi' => Math::BigFloat->new('1024')->bpow('3'),
+        'ti' => Math::BigFloat->new('1024')->bpow('4'),
+        'pi' => Math::BigFloat->new('1024')->bpow('5'),
+        'ei' => Math::BigFloat->new('1024')->bpow('6'),
+        'zi' => Math::BigFloat->new('1024')->bpow('7'),
+        'yi' => Math::BigFloat->new('1024')->bpow('8'),
+    );
 
     $test =~ m{^
                ([<>]=?)?   # comparison
                (.*?)       # value
-               ([kmg]i?)?  # magnitude
+               ([kmgtpezy]i?)?  # magnitude
               $}ix
        or croak "don't understand '$test' as a test";
 
     my $comparison = $1 || '==';
     my $target     = $2;
     my $magnitude  = $3 || '';
-    $target *=           1000 if lc $magnitude eq 'k';
-    $target *=           1024 if lc $magnitude eq 'ki';
-    $target *=        1000000 if lc $magnitude eq 'm';
-    $target *=      1024*1024 if lc $magnitude eq 'mi';
-    $target *=     1000000000 if lc $magnitude eq 'g';
-    $target *= 1024*1024*1024 if lc $magnitude eq 'gi';
+    $magnitude = lc($magnitude);
+    # print STDERR "# Compare.pm: Comparison is: [$comparison]\n";
+    # print STDERR "# Compare.pm: Target is:     [$target]\n";
+    # print STDERR "# Compare.pm: Magnitude is:  [$magnitude]\n";
+    if ( $magnitude ) {
+        if ( $target =~ /^\d+$/ ) {
+            if ( exists $magnitudes{$magnitude} ) {
+                # print STDERR "# Compare.pm: Expanded magnitude is:\n";
+                # print STDERR "# Compare.pm: [$target] * [" . commify($magnitudes{$magnitude}) . "]\n";
+                $target *= $magnitudes{$magnitude};
+            }
+            else {
+                croak "don't understand '$magnitude' as a magnitude";
+            }
+        }
+        else {
+            croak "don't understand '$target' as a number";
+        }
+    }
 
     return "$comparison $target";
 }
 
-sub test { $_[0]->( $_[1] ) }
+sub commify {
+    my $text = reverse $_[0];
+    $text =~ s/(\d\d\d)(?=\d)(?!\d*\.)/$1,/g;
+    return scalar reverse $text;
+}
+
+sub test {
+    my ($ref, $number) = @_;
+
+    return $ref->( $number );
+}
 
 1;
 
