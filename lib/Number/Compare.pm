@@ -3,8 +3,6 @@ package Number::Compare;
 use strict;
 use warnings;
 
-use bignum;
-use Number::Format 'format_number';
 use Math::BigFloat;
 
 use Carp qw(croak);
@@ -12,12 +10,11 @@ use vars qw/$VERSION/;
 $VERSION = '0.0.4';
 
 sub new  {
-    my $referent = shift;
-    my $class = ref $referent || $referent;
-    my $expr = $class->parse_to_perl( shift );
-    # print STDERR "# Compare.pm: Expression is: [$expr]\n";
+    my $class = shift;
+    my $args = shift;
+    my $expr = $class->parse_to_perl( $args );
 
-    bless eval "sub { return \$_[0] $expr }", $class;
+    bless eval "sub { print \"\$_[0] $expr\\n\"; return \$_[0] $expr }", $class;
 }
 
 sub parse_to_perl {
@@ -43,48 +40,39 @@ sub parse_to_perl {
         'yi' => Math::BigFloat->new('1024')->bpow('8'),
     );
 
+    unless ( $test ) {
+        croak "Argument '\$args' must be a non-empty string";
+    }
+
     $test =~ m{^
-               ([<>]=?)?   # comparison
+               ([<>=!]=?)?   # comparison
                (.*?)       # value
                ([kmgtpezy]i?)?  # magnitude
-              $}ix
-       or croak "don't understand '$test' as a test";
+              $}ix;
 
     my $comparison = $1 || '==';
     my $target     = $2;
     my $magnitude  = $3 || '';
     $magnitude = lc($magnitude);
-    # print STDERR "# Compare.pm: Comparison is: [$comparison]\n";
-    # print STDERR "# Compare.pm: Target is:     [$target]\n";
-    # print STDERR "# Compare.pm: Magnitude is:  [$magnitude]\n";
-    if ( $magnitude ) {
-        if ( $target =~ /^\d+$/ ) {
-            if ( exists $magnitudes{$magnitude} ) {
-                # print STDERR "# Compare.pm: Expanded magnitude is:\n";
-                # print STDERR "# Compare.pm: [$target] * [" . commify($magnitudes{$magnitude}) . "]\n";
-                $target *= $magnitudes{$magnitude};
-            }
-            else {
-                croak "don't understand '$magnitude' as a magnitude";
-            }
-        }
-        else {
-            croak "don't understand '$target' as a number";
+    if ( $target =~ /^\d+(?:\.\d+)?$/ ) {
+        if ( exists $magnitudes{$magnitude} ) {
+            $target *= $magnitudes{$magnitude};
         }
     }
+    else {
+        croak "don't understand '$target' as a number";
+    }
 
+    print STDERR "# Compare.pm: $comparison $target\n";
     return "$comparison $target";
-}
-
-sub commify {
-    my $text = reverse $_[0];
-    $text =~ s/(\d\d\d)(?=\d)(?!\d*\.)/$1,/g;
-    return scalar reverse $text;
 }
 
 sub test {
     my ($ref, $number) = @_;
 
+    my $ret = $ref->($number);
+    print STDERR "# Compare.pm: Return is: [$ret]\n";
+    return $ret;
     return $ref->( $number );
 }
 
